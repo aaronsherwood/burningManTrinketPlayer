@@ -15,13 +15,17 @@ uint16_t           sample_rate, delay_count;
 uint32_t           samples;
 volatile uint32_t  index = 0L;
 
+bool startup = true;
+
 void setup() {
   uint8_t  data[6];
   uint32_t bytes;
   
   //wait until there is a trigger to start
   pinMode(2, INPUT);
-  while(digitalRead(2)==LOW){}
+  
+ 
+//  while(digitalRead(2)==LOW){}
 
   if(!(bytes = flash.begin())) {     // Flash init error?
     for(;; PORTB ^= 2, delay(250));  // Blink 2x/sec
@@ -37,6 +41,7 @@ void setup() {
               | ((uint32_t)data[4] <<  8)
               |  (uint32_t)data[5];
   // Audio begins at next byte, so DON'T endRead() here
+  flash.endRead();
 
   PLLCSR |= _BV(PLLE);               // Enable 64 MHz PLL
   delayMicroseconds(100);            // Stabilize
@@ -75,10 +80,17 @@ void setup() {
 void loop() { }
 
 ISR(TIMER0_COMPA_vect) {
-  OCR1B = flash.readNextByte();      // Read flash, write PWM reg.
+  if (startup) {
+     index=samples+1; 
+     startup=false;
+  } else {
+    OCR1B = flash.readNextByte();      // Read flash, write PWM reg.
+  }
   if(++index >= samples) {           // End of audio data?
     index = 0;                       // We must repeat!
-    flash.endRead();
+    if (!startup) {
+      flash.endRead();
+    }
     
     //stay in while loop until counter is over 10
     //counter only advances when there is a trigger
